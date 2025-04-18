@@ -104,12 +104,22 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || 
+          `API request failed with status ${response.status}: ${response.statusText}`
+        );
       }
 
       const data = await response.json();
+      
+      // Check for API-specific errors
       if (data.error) {
-        throw new Error(data.error);
+        throw new Error(`API Error: ${data.error}`);
+      }
+      
+      if (!data.id) {
+        throw new Error('Invalid response: missing prediction ID');
       }
 
       setPredictionId(data.id);
@@ -132,19 +142,36 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Status check failed with status ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.error || 
+          `Status check failed with status ${response.status}: ${response.statusText}`
+        );
       }
 
       const data = await response.json();
+      
+      // Check for API-specific errors
+      if (data.error) {
+        throw new Error(`API Error: ${data.error}`);
+      }
+
+      if (!data.status) {
+        throw new Error('Invalid response: missing status');
+      }
+
       setPredictionStatus(data.status);
 
-      if (data.status === 'completed' && data.output) {
+      if (data.status === 'completed') {
+        if (!data.output || !Array.isArray(data.output) || data.output.length === 0) {
+          throw new Error('Invalid response: missing or empty output array');
+        }
         setGeneratedResult(data.output[0]);
         setIsLoading(false);
         setPredictionId(null);
         setError(null);
       } else if (data.status === 'failed') {
-        throw new Error(data.error || 'Prediction failed');
+        throw new Error(data.error || 'Prediction failed without specific error message');
       }
     } catch (error) {
       console.error('Error checking prediction status:', error);
