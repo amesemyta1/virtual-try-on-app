@@ -1,8 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Shirt, User, Image as ImageIcon, Loader } from 'lucide-react';
+import { Shirt, User, Image as ImageIcon, Loader, AlertCircle } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 const API_BASE_URL = 'https://api.fashn.ai/v1';
+
+interface ErrorState {
+  message: string;
+  type: 'error' | 'warning' | 'info';
+}
 
 function App() {
   const [modelUrl, setModelUrl] = useState('');
@@ -12,45 +17,79 @@ function App() {
   const [predictionId, setPredictionId] = useState<string | null>(null);
   const [predictionStatus, setPredictionStatus] = useState<string | null>(null);
   const [garmentUrl, setGarmentUrl] = useState<string>('');
+  const [error, setError] = useState<ErrorState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showError = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
+    setError({ message, type });
+    setTimeout(() => setError(null), 5000);
+  };
 
   useEffect(() => {
     // Get garment image URL from query parameters
     const params = new URLSearchParams(window.location.search);
     const garmentImageUrl = params.get('garment_image');
     if (garmentImageUrl) {
-      // Validate URL
       try {
         new URL(garmentImageUrl);
         setGarmentUrl(garmentImageUrl);
       } catch {
-        console.error('Invalid garment image URL:', garmentImageUrl);
+        showError('Invalid garment image URL provided', 'warning');
       }
     }
   }, []);
 
   const handleLoadModel = () => {
-    if (modelUrl) {
+    if (!modelUrl) {
+      showError('Please enter a model image URL', 'warning');
+      return;
+    }
+
+    try {
+      new URL(modelUrl);
       setModelPreview(modelUrl);
+      setError(null);
+    } catch {
+      showError('Invalid model image URL', 'error');
     }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setModelPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) {
+      showError('No file selected', 'warning');
+      return;
     }
+
+    if (!file.type.startsWith('image/')) {
+      showError('Please select an image file', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setModelPreview(reader.result as string);
+      setError(null);
+    };
+    reader.onerror = () => {
+      showError('Error reading file', 'error');
+    };
+    reader.readAsDataURL(file);
   };
 
   const startPrediction = async () => {
-    if (!modelPreview || !garmentUrl) return;
+    if (!modelPreview) {
+      showError('Please upload or provide a model image', 'warning');
+      return;
+    }
+    if (!garmentUrl) {
+      showError('Please provide a garment image URL', 'warning');
+      return;
+    }
 
     try {
       setIsLoading(true);
+      setError(null);
       const response = await fetch(`${API_BASE_URL}/run`, {
         method: 'POST',
         headers: {
@@ -64,6 +103,10 @@ function App() {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}`);
+      }
+
       const data = await response.json();
       if (data.error) {
         throw new Error(data.error);
@@ -73,6 +116,7 @@ function App() {
       setPredictionStatus('starting');
     } catch (error) {
       console.error('Error starting prediction:', error);
+      showError(error instanceof Error ? error.message : 'Failed to start prediction', 'error');
       setIsLoading(false);
     }
   };
@@ -87,6 +131,10 @@ function App() {
         },
       });
 
+      if (!response.ok) {
+        throw new Error(`Status check failed with status ${response.status}`);
+      }
+
       const data = await response.json();
       setPredictionStatus(data.status);
 
@@ -94,13 +142,15 @@ function App() {
         setGeneratedResult(data.output[0]);
         setIsLoading(false);
         setPredictionId(null);
+        setError(null);
       } else if (data.status === 'failed') {
-        console.error('Prediction failed:', data.error);
-        setIsLoading(false);
-        setPredictionId(null);
+        throw new Error(data.error || 'Prediction failed');
       }
     } catch (error) {
       console.error('Error checking prediction status:', error);
+      showError(error instanceof Error ? error.message : 'Failed to check prediction status', 'error');
+      setIsLoading(false);
+      setPredictionId(null);
     }
   }, [predictionId]);
 
@@ -128,6 +178,7 @@ function App() {
     setGeneratedResult(null);
     setPredictionId(null);
     setPredictionStatus(null);
+    setError(null);
     setIsLoading(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -136,6 +187,17 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-900 p-4 md:p-8">
+      {error && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ${
+          error.type === 'error' ? 'bg-red-500' : 
+          error.type === 'warning' ? 'bg-yellow-500' : 
+          'bg-blue-500'
+        } text-white flex items-center gap-2 max-w-md`}>
+          <AlertCircle className="w-5 h-5" />
+          <p>{error.message}</p>
+        </div>
+      )}
+      
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Garment Preview Section */}
         <div className="bg-slate-800 rounded-xl p-6 flex flex-col">
@@ -149,6 +211,7 @@ function App() {
                 src={garmentUrl}
                 alt="Garment Preview"
                 className="max-w-full max-h-[400px] object-contain rounded-lg"
+                onError={() => showError('Failed to load garment image', 'error')}
               />
             ) : (
               <div className="text-slate-400 text-center">
@@ -204,6 +267,7 @@ function App() {
                   src={modelPreview}
                   alt="Model Preview"
                   className="max-w-full max-h-[300px] object-contain rounded-lg"
+                  onError={() => showError('Failed to load model image', 'error')}
                 />
               ) : (
                 <User className="w-20 h-20 text-slate-600" />
@@ -238,6 +302,7 @@ function App() {
                 src={generatedResult}
                 alt="Generated Result"
                 className="max-w-full max-h-[400px] object-contain rounded-lg"
+                onError={() => showError('Failed to load result image', 'error')}
               />
             ) : (
               <ImageIcon className="w-20 h-20 text-slate-600" />
