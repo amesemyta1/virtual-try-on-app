@@ -11,10 +11,23 @@ function App() {
   const [generatedResult, setGeneratedResult] = useState<string | null>(null);
   const [predictionId, setPredictionId] = useState<string | null>(null);
   const [predictionStatus, setPredictionStatus] = useState<string | null>(null);
+  const [garmentUrl, setGarmentUrl] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Example garment URL - replace with your actual garment image
-  const garmentUrl = 'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&q=80&w=500';
+  useEffect(() => {
+    // Get garment image URL from query parameters
+    const params = new URLSearchParams(window.location.search);
+    const garmentImageUrl = params.get('garment_image');
+    if (garmentImageUrl) {
+      // Validate URL
+      try {
+        new URL(garmentImageUrl);
+        setGarmentUrl(garmentImageUrl);
+      } catch {
+        console.error('Invalid garment image URL:', garmentImageUrl);
+      }
+    }
+  }, []);
 
   const handleLoadModel = () => {
     if (modelUrl) {
@@ -138,7 +151,11 @@ function App() {
                 className="max-w-full max-h-[400px] object-contain rounded-lg"
               />
             ) : (
-              <Shirt className="w-20 h-20 text-slate-600" />
+              <div className="text-slate-400 text-center">
+                <Shirt className="w-20 h-20 mx-auto mb-2" />
+                <p>No garment image provided</p>
+                <p className="text-sm mt-2">Add ?garment_image=URL to the page URL</p>
+              </div>
             )}
           </div>
         </div>
@@ -194,7 +211,7 @@ function App() {
             </div>
             <button
               onClick={handleGenerateTryOn}
-              disabled={!modelPreview || isLoading}
+              disabled={!modelPreview || !garmentUrl || isLoading}
               className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center justify-center gap-2"
             >
               {isLoading ? (
