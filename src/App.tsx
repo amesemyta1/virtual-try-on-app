@@ -71,22 +71,44 @@ function App() {
         return;
       }
 
+      // Сначала остановим предыдущий стрим, если он есть
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
       const constraints = {
         video: {
           facingMode: 'user',
           width: { ideal: 1280 },
           height: { ideal: 720 }
-        }
+        },
+        audio: false
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       if (videoRef.current) {
+        videoRef.current.srcObject = null; // Сбрасываем предыдущий источник
         videoRef.current.srcObject = stream;
-        // Дожидаемся, когда видео действительно начнет воспроизводиться
-        await videoRef.current.play();
+        videoRef.current.muted = true;
+        
+        // Ждем, пока видео будет готово
+        await new Promise((resolve) => {
+          if (!videoRef.current) return;
+          videoRef.current.onloadedmetadata = () => {
+            if (!videoRef.current) return;
+            videoRef.current.play()
+              .then(resolve)
+              .catch(error => {
+                console.error('Error playing video:', error);
+                showError('Failed to start video playback', 'error');
+              });
+          };
+        });
+
         streamRef.current = stream;
         setIsCameraOpen(true);
+        console.log('Camera initialized successfully');
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
@@ -100,10 +122,17 @@ function App() {
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log('Camera track stopped:', track.label);
+      });
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsCameraOpen(false);
+    console.log('Camera stopped');
   };
 
   const capturePhoto = () => {
@@ -337,14 +366,14 @@ function App() {
             </div>
             <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative min-h-[300px]">
               {isCameraOpen ? (
-                <div className="relative w-full h-[300px]">
+                <div className="relative w-full h-[300px] bg-black rounded-lg overflow-hidden">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
                     muted
-                    className="absolute inset-0 w-full h-full object-cover rounded-lg bg-black"
-                    style={{ transform: 'scaleX(-1)' }} // Зеркальное отображение для фронтальной камеры
+                    className="absolute inset-0 w-full h-full object-cover"
+                    style={{ transform: 'scaleX(-1)' }}
                   />
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-10">
                     <button
