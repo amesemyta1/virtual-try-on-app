@@ -183,6 +183,13 @@ function App() {
     try {
       setIsLoading(true);
       setError(null);
+
+      // Логируем данные запроса
+      console.log('Sending request with:', {
+        modelImage: modelPreview.substring(0, 100) + '...',
+        garmentImage: garmentUrl
+      });
+
       const response = await fetch(`${API_BASE_URL}/run`, {
         method: 'POST',
         headers: {
@@ -196,20 +203,31 @@ function App() {
         }),
       });
 
+      const data = await response.json();
+      
+      // Логируем ответ API
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: data
+      });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
         throw new Error(
-          errorData?.error || 
+          data?.error || 
           `API request failed with status ${response.status}: ${response.statusText}`
         );
       }
 
-      const data = await response.json();
-      
       if (data.error) {
-        throw new Error(`API Error: ${data.error}`);
+        // Детальное логирование ошибки API
+        console.error('API Error Details:', {
+          error: data.error,
+          fullResponse: data
+        });
+        throw new Error(typeof data.error === 'object' ? JSON.stringify(data.error) : data.error);
       }
-      
+
       if (!data.id) {
         throw new Error('Invalid response: missing prediction ID');
       }
@@ -217,8 +235,20 @@ function App() {
       setPredictionId(data.id);
       setPredictionStatus('starting');
     } catch (error) {
-      console.error('Error starting prediction:', error);
-      showError(error instanceof Error ? error.message : 'Failed to start prediction', 'error');
+      console.error('Error details:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
+      let errorMessage = 'Failed to start prediction';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      }
+
+      showError(errorMessage, 'error');
       setIsLoading(false);
     }
   };
@@ -233,18 +263,25 @@ function App() {
         },
       });
 
+      const data = await response.json();
+
+      // Логируем статус
+      console.log('Status check response:', {
+        predictionId,
+        status: response.status,
+        data: data
+      });
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
         throw new Error(
-          errorData?.error || 
+          data?.error || 
           `Status check failed with status ${response.status}: ${response.statusText}`
         );
       }
 
-      const data = await response.json();
-      
       if (data.error) {
-        throw new Error(`API Error: ${data.error}`);
+        console.error('Status check error details:', data);
+        throw new Error(typeof data.error === 'object' ? JSON.stringify(data.error) : data.error);
       }
 
       if (!data.status) {
@@ -265,8 +302,20 @@ function App() {
         throw new Error(data.error || 'Prediction failed without specific error message');
       }
     } catch (error) {
-      console.error('Error checking prediction status:', error);
-      showError(error instanceof Error ? error.message : 'Failed to check prediction status', 'error');
+      console.error('Status check error details:', {
+        error,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
+      let errorMessage = 'Failed to check prediction status';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null) {
+        errorMessage = JSON.stringify(error);
+      }
+
+      showError(errorMessage, 'error');
       setIsLoading(false);
       setPredictionId(null);
     }
