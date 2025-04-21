@@ -18,7 +18,6 @@ function App() {
   const [garmentUrl, setGarmentUrl] = useState<string>('');
   const [error, setError] = useState<ErrorState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const showError = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
     setError({ message, type });
@@ -63,8 +62,6 @@ function App() {
   };
 
   const handleCameraUpload = async () => {
-    if (!cameraInputRef.current) return;
-
     try {
       // Check if the browser supports the camera
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -72,36 +69,57 @@ function App() {
         return;
       }
 
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      
-      // Create a video element to capture the image
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      await video.play();
+      // Request camera access with preferred facing mode
+      const constraints = {
+        video: {
+          facingMode: 'user', // Use front camera by default
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      };
 
-      // Create a canvas to capture the image
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // Create a video element
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', ''); // Required for iOS
+      video.setAttribute('autoplay', '');
+      video.srcObject = stream;
+
+      // Wait for video to be ready
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          video.play().then(resolve);
+        };
+      });
+
+      // Create a canvas with the video dimensions
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
+
+      // Draw the current frame from video to canvas
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         throw new Error('Could not get canvas context');
       }
+      ctx.drawImage(video, 0, 0);
 
-      // Draw the current frame
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Stop the video stream
+      // Stop all video tracks
       stream.getTracks().forEach(track => track.stop());
 
       // Convert to data URL
-      const dataUrl = canvas.toDataURL('image/jpeg');
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       setModelPreview(dataUrl);
       setError(null);
+
     } catch (error) {
       console.error('Error accessing camera:', error);
-      showError('Failed to access camera. Please check permissions.', 'error');
+      if (error instanceof Error) {
+        showError(`Camera error: ${error.message}`, 'error');
+      } else {
+        showError('Failed to access camera. Please check permissions.', 'error');
+      }
     }
   };
 
