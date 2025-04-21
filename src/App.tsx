@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Shirt, User, Image as ImageIcon, Loader, AlertCircle } from 'lucide-react';
+import { Shirt, User, Image as ImageIcon, Loader, AlertCircle, Camera } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 const API_BASE_URL = 'https://api.fashn.ai/v1';
@@ -10,7 +10,6 @@ interface ErrorState {
 }
 
 function App() {
-  const [modelUrl, setModelUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [modelPreview, setModelPreview] = useState<string | null>(null);
   const [generatedResult, setGeneratedResult] = useState<string | null>(null);
@@ -19,6 +18,7 @@ function App() {
   const [garmentUrl, setGarmentUrl] = useState<string>('');
   const [error, setError] = useState<ErrorState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const showError = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
     setError({ message, type });
@@ -38,21 +38,6 @@ function App() {
       }
     }
   }, []);
-
-  const handleLoadModel = () => {
-    if (!modelUrl) {
-      showError('Please enter a model image URL', 'warning');
-      return;
-    }
-
-    try {
-      new URL(modelUrl);
-      setModelPreview(modelUrl);
-      setError(null);
-    } catch {
-      showError('Invalid model image URL', 'error');
-    }
-  };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -77,9 +62,52 @@ function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleCameraUpload = async () => {
+    if (!cameraInputRef.current) return;
+
+    try {
+      // Check if the browser supports the camera
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showError('Camera access is not supported in your browser', 'error');
+        return;
+      }
+
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      
+      // Create a video element to capture the image
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+
+      // Create a canvas to capture the image
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
+
+      // Draw the current frame
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Stop the video stream
+      stream.getTracks().forEach(track => track.stop());
+
+      // Convert to data URL
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      setModelPreview(dataUrl);
+      setError(null);
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      showError('Failed to access camera. Please check permissions.', 'error');
+    }
+  };
+
   const startPrediction = async () => {
     if (!modelPreview) {
-      showError('Please upload or provide a model image', 'warning');
+      showError('Please upload or take a photo of the model', 'warning');
       return;
     }
     if (!garmentUrl) {
@@ -113,7 +141,6 @@ function App() {
 
       const data = await response.json();
       
-      // Check for API-specific errors
       if (data.error) {
         throw new Error(`API Error: ${data.error}`);
       }
@@ -151,7 +178,6 @@ function App() {
 
       const data = await response.json();
       
-      // Check for API-specific errors
       if (data.error) {
         throw new Error(`API Error: ${data.error}`);
       }
@@ -200,7 +226,6 @@ function App() {
   };
 
   const handleTryAgain = () => {
-    setModelUrl('');
     setModelPreview(null);
     setGeneratedResult(null);
     setPredictionId(null);
@@ -257,36 +282,31 @@ function App() {
             Upload Model Photo
           </h2>
           <div className="flex-1 flex flex-col gap-4">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={modelUrl}
-                onChange={(e) => setModelUrl(e.target.value)}
-                placeholder="Paste model photo URL"
-                className="flex-1 px-4 py-2 rounded-lg bg-slate-700 text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="relative">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileUpload}
+                  accept="image/*"
+                  className="hidden"
+                  id="file-upload"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <ImageIcon className="w-5 h-5" />
+                  Choose File
+                </label>
+              </div>
               <button
-                onClick={handleLoadModel}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                onClick={handleCameraUpload}
+                className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
-                Load URL
+                <Camera className="w-5 h-5" />
+                Take Photo
               </button>
-            </div>
-            <div className="relative">
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                accept="image/*"
-                className="hidden"
-                id="file-upload"
-              />
-              <label
-                htmlFor="file-upload"
-                className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center justify-center cursor-pointer"
-              >
-                Choose File
-              </label>
             </div>
             <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4">
               {modelPreview ? (
