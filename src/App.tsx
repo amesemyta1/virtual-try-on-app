@@ -14,12 +14,7 @@ const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => voi
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    startCamera();
-    return () => stopCamera();
-  }, []);
-
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user' },
@@ -34,7 +29,12 @@ const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => voi
       console.error('Error accessing camera:', error);
       onClose();
     }
-  };
+  }, [onClose]);
+
+  useEffect(() => {
+    startCamera();
+    return () => stopCamera();
+  }, [startCamera]);
 
   const stopCamera = () => {
     if (streamRef.current) {
