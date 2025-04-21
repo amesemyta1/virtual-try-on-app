@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Shirt, User, Image as ImageIcon, Loader, AlertCircle, Camera, X } from 'lucide-react';
+import { Shirt, User, Image as ImageIcon, Loader, AlertCircle, Camera, X, SwitchCamera } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 const API_BASE_URL = 'https://api.fashn.ai/v1';
@@ -13,11 +13,17 @@ interface ErrorState {
 const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => void; onClose: () => void }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
   const startCamera = useCallback(async () => {
     try {
+      // Остановим предыдущий стрим, если он есть
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: { facingMode },
         audio: false
       });
 
@@ -29,7 +35,11 @@ const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => voi
       console.error('Error accessing camera:', error);
       onClose();
     }
-  }, [onClose]);
+  }, [facingMode, onClose]);
+
+  const toggleCamera = useCallback(() => {
+    setFacingMode(current => current === 'user' ? 'environment' : 'user');
+  }, []);
 
   useEffect(() => {
     startCamera();
@@ -73,14 +83,23 @@ const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => voi
           playsInline
           muted
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: 'scaleX(-1)' }}
+          style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
         />
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={toggleCamera}
+            className="p-2 bg-slate-800/80 hover:bg-slate-700/80 text-white rounded-full transition-colors backdrop-blur-sm"
+            title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+          >
+            <SwitchCamera className="w-6 h-6" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 bg-red-600/80 hover:bg-red-700/80 text-white rounded-full transition-colors backdrop-blur-sm"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
       </div>
       <div className="bg-slate-900 p-4 flex justify-center">
         <button
