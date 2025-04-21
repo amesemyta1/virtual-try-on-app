@@ -332,32 +332,32 @@ function App() {
                 Take Photo
               </button>
             </div>
-            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative">
+            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative min-h-[300px]">
               {isCameraOpen ? (
-                <>
+                <div className="relative w-full h-full">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    className="w-full h-full object-cover rounded-lg"
+                    className="absolute inset-0 w-full h-full object-cover rounded-lg"
                   />
-                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-10">
                     <button
                       onClick={capturePhoto}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg"
                     >
                       <Camera className="w-5 h-5" />
                       Capture
                     </button>
                     <button
                       onClick={stopCamera}
-                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                      className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg"
                     >
                       <X className="w-5 h-5" />
                       Cancel
                     </button>
                   </div>
-                </>
+                </div>
               ) : modelPreview ? (
                 <img
                   src={modelPreview}
