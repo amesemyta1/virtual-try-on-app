@@ -9,6 +9,91 @@ interface ErrorState {
   type: 'error' | 'warning' | 'info';
 }
 
+// Компонент камеры
+const CameraModal = ({ onCapture, onClose }: { onCapture: (image: string) => void; onClose: () => void }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    startCamera();
+    return () => stopCamera();
+  }, []);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      onClose();
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const takePhoto = () => {
+    if (!videoRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Зеркально отображаем фото с фронтальной камеры
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0);
+
+    const image = canvas.toDataURL('image/jpeg', 0.8);
+    onCapture(image);
+    stopCamera();
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      <div className="relative flex-1">
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
+        />
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+      <div className="bg-slate-900 p-4 flex justify-center">
+        <button
+          onClick={takePhoto}
+          className="w-16 h-16 bg-white rounded-full flex items-center justify-center"
+        >
+          <div className="w-14 h-14 rounded-full border-4 border-emerald-500" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [modelPreview, setModelPreview] = useState<string | null>(null);
@@ -17,10 +102,8 @@ function App() {
   const [predictionStatus, setPredictionStatus] = useState<string | null>(null);
   const [garmentUrl, setGarmentUrl] = useState<string>('');
   const [error, setError] = useState<ErrorState | null>(null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const showError = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
     setError({ message, type });
@@ -64,102 +147,9 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const startCamera = async () => {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        showError('Camera access is not supported in your browser', 'error');
-        return;
-      }
-
-      // Сначала остановим предыдущий стрим, если он есть
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
-
-      const constraints = {
-        video: {
-          facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = null; // Сбрасываем предыдущий источник
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        
-        // Ждем, пока видео будет готово
-        await new Promise((resolve) => {
-          if (!videoRef.current) return;
-          videoRef.current.onloadedmetadata = () => {
-            if (!videoRef.current) return;
-            videoRef.current.play()
-              .then(resolve)
-              .catch(error => {
-                console.error('Error playing video:', error);
-                showError('Failed to start video playback', 'error');
-              });
-          };
-        });
-
-        streamRef.current = stream;
-        setIsCameraOpen(true);
-        console.log('Camera initialized successfully');
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      if (error instanceof Error) {
-        showError(`Camera error: ${error.message}`, 'error');
-      } else {
-        showError('Failed to access camera. Please check permissions.', 'error');
-      }
-    }
+  const handleCameraCapture = (image: string) => {
+    setModelPreview(image);
   };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
-        track.stop();
-        console.log('Camera track stopped:', track.label);
-      });
-      streamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraOpen(false);
-    console.log('Camera stopped');
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current || !streamRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      showError('Could not get canvas context', 'error');
-      return;
-    }
-
-    ctx.drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-    setModelPreview(dataUrl);
-    stopCamera();
-  };
-
-  useEffect(() => {
-    return () => {
-      stopCamera(); // Cleanup camera when component unmounts
-    };
-  }, []);
 
   const startPrediction = async () => {
     if (!modelPreview) {
@@ -281,18 +271,6 @@ function App() {
     startPrediction();
   };
 
-  const handleTryAgain = () => {
-    setModelPreview(null);
-    setGeneratedResult(null);
-    setPredictionId(null);
-    setPredictionStatus(null);
-    setError(null);
-    setIsLoading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 p-4 md:p-8">
       {error && (
@@ -304,6 +282,13 @@ function App() {
           <AlertCircle className="w-5 h-5" />
           <p>{error.message}</p>
         </div>
+      )}
+
+      {showCamera && (
+        <CameraModal
+          onCapture={handleCameraCapture}
+          onClose={() => setShowCamera(false)}
+        />
       )}
       
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -357,42 +342,15 @@ function App() {
                 </label>
               </div>
               <button
-                onClick={startCamera}
+                onClick={() => setShowCamera(true)}
                 className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Camera className="w-5 h-5" />
                 Take Photo
               </button>
             </div>
-            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative min-h-[300px]">
-              {isCameraOpen ? (
-                <div className="relative w-full h-[300px] bg-black rounded-lg overflow-hidden">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="absolute inset-0 w-full h-full object-cover"
-                    style={{ transform: 'scaleX(-1)' }}
-                  />
-                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-10">
-                    <button
-                      onClick={capturePhoto}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg"
-                    >
-                      <Camera className="w-5 h-5" />
-                      Capture
-                    </button>
-                    <button
-                      onClick={stopCamera}
-                      className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg"
-                    >
-                      <X className="w-5 h-5" />
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : modelPreview ? (
+            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4">
+              {modelPreview ? (
                 <img
                   src={modelPreview}
                   alt="Model Preview"
@@ -440,7 +398,17 @@ function App() {
           </div>
           {generatedResult && (
             <button
-              onClick={handleTryAgain}
+              onClick={() => {
+                setModelPreview(null);
+                setGeneratedResult(null);
+                setPredictionId(null);
+                setPredictionStatus(null);
+                setError(null);
+                setIsLoading(false);
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = '';
+                }
+              }}
               className="mt-4 w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
             >
               Try Again
