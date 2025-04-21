@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Shirt, User, Image as ImageIcon, Loader, AlertCircle, Camera } from 'lucide-react';
+import { Shirt, User, Image as ImageIcon, Loader, AlertCircle, Camera, X } from 'lucide-react';
 
 const API_KEY = import.meta.env.VITE_API_KEY;
 const API_BASE_URL = 'https://api.fashn.ai/v1';
@@ -17,7 +17,10 @@ function App() {
   const [predictionStatus, setPredictionStatus] = useState<string | null>(null);
   const [garmentUrl, setGarmentUrl] = useState<string>('');
   const [error, setError] = useState<ErrorState | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const showError = (message: string, type: 'error' | 'warning' | 'info' = 'error') => {
     setError({ message, type });
@@ -61,58 +64,27 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const handleCameraUpload = async () => {
+  const startCamera = async () => {
     try {
-      // Check if the browser supports the camera
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         showError('Camera access is not supported in your browser', 'error');
         return;
       }
 
-      // Request camera access with preferred facing mode
       const constraints = {
         video: {
-          facingMode: 'user', // Use front camera by default
+          facingMode: 'user',
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-      // Create a video element
-      const video = document.createElement('video');
-      video.setAttribute('playsinline', ''); // Required for iOS
-      video.setAttribute('autoplay', '');
-      video.srcObject = stream;
-
-      // Wait for video to be ready
-      await new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-          video.play().then(resolve);
-        };
-      });
-
-      // Create a canvas with the video dimensions
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Draw the current frame from video to canvas
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Could not get canvas context');
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setIsCameraOpen(true);
       }
-      ctx.drawImage(video, 0, 0);
-
-      // Stop all video tracks
-      stream.getTracks().forEach(track => track.stop());
-
-      // Convert to data URL
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      setModelPreview(dataUrl);
-      setError(null);
-
     } catch (error) {
       console.error('Error accessing camera:', error);
       if (error instanceof Error) {
@@ -122,6 +94,40 @@ function App() {
       }
     }
   };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !streamRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      showError('Could not get canvas context', 'error');
+      return;
+    }
+
+    ctx.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    setModelPreview(dataUrl);
+    stopCamera();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCamera(); // Cleanup camera when component unmounts
+    };
+  }, []);
 
   const startPrediction = async () => {
     if (!modelPreview) {
@@ -319,15 +325,40 @@ function App() {
                 </label>
               </div>
               <button
-                onClick={handleCameraUpload}
+                onClick={startCamera}
                 className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <Camera className="w-5 h-5" />
                 Take Photo
               </button>
             </div>
-            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4">
-              {modelPreview ? (
+            <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative">
+              {isCameraOpen ? (
+                <>
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                    <button
+                      onClick={capturePhoto}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-5 h-5" />
+                      Capture
+                    </button>
+                    <button
+                      onClick={stopCamera}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      <X className="w-5 h-5" />
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              ) : modelPreview ? (
                 <img
                   src={modelPreview}
                   alt="Model Preview"
