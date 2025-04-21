@@ -80,8 +80,11 @@ function App() {
       };
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Дожидаемся, когда видео действительно начнет воспроизводиться
+        await videoRef.current.play();
         streamRef.current = stream;
         setIsCameraOpen(true);
       }
@@ -334,12 +337,14 @@ function App() {
             </div>
             <div className="flex-1 bg-slate-700/50 rounded-lg flex items-center justify-center p-4 relative min-h-[300px]">
               {isCameraOpen ? (
-                <div className="relative w-full h-full">
+                <div className="relative w-full h-[300px]">
                   <video
                     ref={videoRef}
                     autoPlay
                     playsInline
-                    className="absolute inset-0 w-full h-full object-cover rounded-lg"
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover rounded-lg bg-black"
+                    style={{ transform: 'scaleX(-1)' }} // Зеркальное отображение для фронтальной камеры
                   />
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-10">
                     <button
