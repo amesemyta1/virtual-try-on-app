@@ -39,7 +39,3 @@ npm run dev
 - Vite
 - Tailwind CSS
 - Fashn.ai API
-
-## Лицензия
-
-MIT 
