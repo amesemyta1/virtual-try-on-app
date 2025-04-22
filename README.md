@@ -1,4 +1,4 @@
-# Virtual Try-On App
+# Virtual Try-On App (React)
 
 Приложение для виртуальной примерки одежды с использованием API Fashn.ai.
 
